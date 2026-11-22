@@ -1,0 +1,52 @@
+# STM32F103ZET61 / STM32CubeMX + CMake + CLion
+# 放在仓库根目录 E:\desk\program\.gitignore
+# 保留源码、CubeMX/CMake 工程文件、启动文件、链接脚本、HAL/CMSIS 源码和工具链脚本。
+# 不全局忽略 *.a / *.lib，以免将来需要提交的预编译库被误排除。
+
+# --- CMake / Ninja 构建目录 ---
+# CMakePresets.json 的 binaryDir 是 build/<presetName>，当前已有 build/Debug
+/STM32F103ZET61/build/
+# CLion 自动生成的构建目录
+/STM32F103ZET61/cmake-build-*/
+cmake-build-*/
+out/
+
+# --- 固件与编译中间文件（防漏网，当前均只出现在构建目录中）---
+*.elf
+*.hex
+*.map
+*.lst
+*.su
+*.obj
+*.o
+*.d
+*.axf
+*.srec
+*.ihex
+*.pdb
+*.ilk
+*.exe
+*.dmp
+
+# 常见固件镜像。当前源码树中没有需要保留的 .bin
+*.bin
+
+# --- CLion / IntelliJ ---
+# 含 workspace、本机调试配置和工具链路径，不适合入库
+.idea/
+*.iml
+
+# --- 编辑器与系统文件 ---
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# --- VS Code / Cursor 本机文件（当前项目尚无 .vscode，预留）---
+.vscode/*.log
+.history/
