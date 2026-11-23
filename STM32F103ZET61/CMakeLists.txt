@@ -48,6 +48,10 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         User/Drivers/mpu6050.h
         User/App/app_imu.c
         User/App/app_imu.h
+        User/Drivers/adc_input.c  # 编译 ADC 驱动层的实现。
+        User/Drivers/adc_input.h  # 将驱动头文件关联到 CLion 项目目标。
+        User/App/app_adc.c        # 编译 ADC 应用层的实现。
+        User/App/app_adc.h        # 将应用头文件关联到 CLion 项目目标。
 )
 
 # Add include paths
