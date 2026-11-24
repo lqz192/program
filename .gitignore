@@ -5,7 +5,7 @@
 
 # --- CMake / Ninja 构建目录 ---
 # CMakePresets.json 的 binaryDir 是 build/<presetName>，当前已有 build/Debug
-/STM32F103ZET61/build/
+build/
 # CLion 自动生成的构建目录
 /STM32F103ZET61/cmake-build-*/
 cmake-build-*/

@@ -21,5 +21,5 @@ HAL_StatusTypeDef adc_input_read(uint32_t *raw)
         *raw = HAL_ADC_GetValue(&hadc1);
     }//等待失败不使用原始值
     HAL_StatusTypeDef stop_status = HAL_ADC_Stop(&hadc1);
-    return status == HAL_OK ? HAL_OK : stop_status;
+    return status == HAL_OK ? stop_status : status;
 }
