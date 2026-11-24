@@ -1,4 +1,5 @@
 #include "app_imu.h"  // 对照应用接口检查以下函数的定义。
+#include "app_node_link.h"  // 发布 MPU6050 的采样结果。
 #include "mpu6050.h"  // 使用驱动接口、数据结构和返回状态。
 #include "i2c.h"      // 获取 CubeMX 生成的 hi2c1。
 #include "usart.h"    // 获取 CubeMX 生成的 huart1。
@@ -51,6 +52,7 @@ void app_imu_run(void)
     if (mpu6050_read_data(&hi2c1, device_addr, &raw_data) != mpu6050_ok)
     {  // 失败的帧不能使用。
         sensor_ready = false;  // 下一次到期时重新初始化传感器。
+        app_node_sample_update(node_first, NULL);  // 本轮读帧失败，清除旧样本。
         send_line("MPU6050 READ_ERR I2C\r\n");  // 表明这次读帧失败。
         return;  // 跳过本帧数据输出。
     }  // 继续执行时，raw_data 中的字段均有效。
@@ -62,6 +64,7 @@ void app_imu_run(void)
                           raw_data.gx, raw_data.gy, raw_data.gz);  // 三轴角速度。
     if (length > 0 && (size_t)length < sizeof(line))
     {  // 只发送格式化成功且完整的日志。
+        app_node_sample_update(node_first, line);  // 保存有效的六轴数据供调度器读取。
         send_line(line);  // 将当前帧交给串口。
     }  // 返回主循环等待下一帧。
 }  // 结束本轮应用调用

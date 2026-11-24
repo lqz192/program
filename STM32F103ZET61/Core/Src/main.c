@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 #include "app_imu.h"  // USER CODE BEGIN Includes 区，声明下面调用的应用函数。
 #include "app_adc.h"  // 新增，声明 ADC 应用接口。
+#include "app_node_link.h"  // 引入节点通信接口。
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -93,9 +94,11 @@ int main(void)
   MX_I2C1_Init();
   MX_USART1_UART_Init();
   MX_ADC1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   app_imu_init();  // USER CODE BEGIN 2 区，等 I2C1 和 USART1 初始化完成后再调用。
   app_adc_init();  // 新增，校准 ADC 并记录起始时间。
+  app_node_link_init(1U);  // 在 USART2 启动节点 1 的接收。
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -105,6 +108,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    app_node_link_run();  // 处理调度器发来的请求。
     app_imu_run();  // USER CODE BEGIN 3 区，由主循环反复调用。
     app_adc_run();  // 按自己的周期采集 PA1。
   }

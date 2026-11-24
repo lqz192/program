@@ -52,6 +52,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         User/Drivers/adc_input.h  # 将驱动头文件关联到 CLion 项目目标。
         User/App/app_adc.c        # 编译 ADC 应用层的实现。
         User/App/app_adc.h        # 将应用头文件关联到 CLion 项目目标。
+        User/App/app_node_link.c  # 编译本板节点协议。
+        User/Comm/link_uart.c     # 编译本板串口收发。
 )
 
 # Add include paths
@@ -59,6 +61,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined include paths
         User/Drivers
         User/App
+        User/Comm
 )
 
 # Add project symbols (macros)

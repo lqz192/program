@@ -1,4 +1,5 @@
 #include "app_adc.h"  // 检查应用函数的声明和实现是否一致。
+#include "app_node_link.h"  // 发布 PA1 的采样结果。
 #include "adc_input.h"  // 通过驱动接口校准 ADC 和读取原始值。
 #include "usart.h"    // 使用 USART1 发送文本日志。
 #include <stdbool.h>  // 记录 ADC 校准是否成功。
@@ -39,6 +40,7 @@ void app_adc_run(void)
     uint32_t raw;
     if (adc_input_read( &raw ) != HAL_OK )
     {
+        app_node_sample_update(node_second, NULL);  // 本轮读取失败，清除旧样本。
         send_line("ADC READ_ERR\r\n");
         return;
     }
@@ -49,7 +51,7 @@ void app_adc_run(void)
                          (unsigned long)raw, (unsigned long)voltage_ms);  // 参数类型与 %lu 对应。
     if (length >0 && (size_t)length < sizeof(line))
     {
-        //只发送格式化成功且完整的一行
+        app_node_sample_update(node_second, line);  // 保存有效的 ADC 数据供调度器读取。
         send_line(line);
     }
 }
