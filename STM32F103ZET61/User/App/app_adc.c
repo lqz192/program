@@ -1,57 +1,65 @@
-#include "app_adc.h"  // 检查应用函数的声明和实现是否一致。
-#include "app_node_link.h"  // 发布 PA1 的采样结果。
-#include "adc_input.h"  // 通过驱动接口校准 ADC 和读取原始值。
-#include "usart.h"    // 使用 USART1 发送文本日志。
-#include <stdbool.h>  // 记录 ADC 校准是否成功。
-#include <stdio.h>    // 使用 snprintf() 格式化采样结果。
-#include <string.h>   // 使用 strlen() 获取日志字节数。
+/**
+ * @file    app_adc.c
+ * @brief   ADC 周期采集与发布应用实现。
+ */
 
-static const uint32_t verf_mv = 3300U;
-static bool adc_ready;
-static uint32_t last_sample_ms;
+#include "app_adc.h"
+#include "app_node_link.h"
+#include "adc_input.h"
+#include "debug_uart.h"
+#include <stdbool.h>
+#include <stdio.h>
 
-static void send_line(const char *line)
-{  // 将一行日志统一从 USART1 发出。
-    (void)HAL_UART_Transmit(&huart1, (const uint8_t *)line,  // 把字符串按字节发送。
-                            (uint16_t)strlen(line), 20U);  // 发送有效字符，UART 超时参数为 20 ms。
-}  // 采样结果由 ADC 状态决定，串口用于观察结果
+#define ADC_VREF_MV         3300U   // ADC 参考电压，单位 mV。
+#define ADC_SAMPLE_MS       100U    // 正常采样周期，单位 ms。
+#define ADC_RETRY_MS        1000U   // 校准失败后的重试周期，单位 ms。
+
+static bool sensor_ready;           // ADC 校准就绪标志。
+static uint32_t last_action_ms;     // 上次采样或校准重试的毫秒时刻。
 
 void app_adc_init(void)
 {
-    adc_ready = (adc_input_calibrate() == HAL_OK);  //校准成功后才启用ADC
-    if (!adc_ready)
-    {  // 只停用 ADC 采集。
-        send_line("ADC CAL_ERR\r\n");  // 报告校准失败。
-        return;  // 主循环仍继续调用 MPU6050 应用。
-    }  // ADC 校准成功。
-    last_sample_ms = HAL_GetTick();
+    sensor_ready = (adc_input_calibrate() == HAL_OK);
+    last_action_ms = HAL_GetTick();
+    if (!sensor_ready)
+    {
+        send_line("ADC CAL_ERR\r\n");
+        return;
+    }
     send_line("ADC READY\r\n");
 }
 
 void app_adc_run(void)
 {
     uint32_t now_ms = HAL_GetTick();
-    if (!adc_ready || now_ms - last_sample_ms < 100U)
+    uint32_t period_ms = sensor_ready ? ADC_SAMPLE_MS : ADC_RETRY_MS;
+
+    if (now_ms - last_action_ms < period_ms)
     {
         return;
     }
-    last_sample_ms = now_ms;
-
-    uint32_t raw;
-    if (adc_input_read( &raw ) != HAL_OK )
+    if (!sensor_ready)
     {
-        app_node_sample_update(node_second, NULL);  // 本轮读取失败，清除旧样本。
+        app_adc_init();
+        return;
+    }
+
+    last_action_ms = now_ms;
+    uint32_t raw = 0U;
+    if (adc_input_read(&raw) != HAL_OK)
+    {
+        app_node_sample_update(node_second, NULL);  // 读取失败时撤销第二槽旧样本。
         send_line("ADC READ_ERR\r\n");
         return;
     }
 
-    uint32_t voltage_ms = (raw * verf_mv + 2047U) / 4095U;
+    uint32_t voltage_mv = (raw * ADC_VREF_MV + 2047U) / 4095U;  // 12 位码值四舍五入换算 mV。
     char line[40];
-    int length = snprintf(line, sizeof(line), "ADC raw=%lu mv=%lu\r\n",  // 生成串口输出文本。
-                         (unsigned long)raw, (unsigned long)voltage_ms);  // 参数类型与 %lu 对应。
-    if (length >0 && (size_t)length < sizeof(line))
+    int length = snprintf(line, sizeof(line), "ADC raw=%lu mv=%lu\r\n",
+                          (unsigned long)raw, (unsigned long)voltage_mv);
+    if (length > 0 && (size_t)length < sizeof(line))
     {
-        app_node_sample_update(node_second, line);  // 保存有效的 ADC 数据供调度器读取。
+        app_node_sample_update(node_second, line);
         send_line(line);
     }
 }

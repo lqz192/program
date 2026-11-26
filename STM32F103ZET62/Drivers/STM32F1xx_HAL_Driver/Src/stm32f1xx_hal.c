@@ -25,7 +25,7 @@
     used by the PPP peripheral drivers and the user to start using the HAL.
     [..]
     The HAL contains two APIs' categories:
-         (+) Common HAL APIs
+         (+) Comm HAL APIs
          (+) Services HAL APIs
 
   @endverbatim

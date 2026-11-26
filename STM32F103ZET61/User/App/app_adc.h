@@ -1,7 +1,19 @@
-#ifndef APP_ADC_H  // 第一次包含时处理下面的声明。
-#define APP_ADC_H  // 防止重复声明。
+/**
+ * @file    app_adc.h
+ * @brief   ADC 周期采集与发布应用接口。
+ */
 
-void app_adc_init(void);    // 外设初始化完成后，校准 ADC1 一次。
-void app_adc_run(void);     // 到达采集周期时触发 ADC 并输出。
+#ifndef APP_ADC_H
+#define APP_ADC_H
 
-#endif
+/**
+ * @brief  校准 ADC1 并记录初始化时间戳。
+ */
+void app_adc_init(void);
+
+/**
+ * @brief  主循环轮询，按周期采样 PA1 电压或在校准失败后定时重试。
+ */
+void app_adc_run(void);
+
+#endif  /* APP_ADC_H */

@@ -194,7 +194,7 @@ typedef struct
   * @{
   */
 
-/** @defgroup EXTI_LL_EM_WRITE_READ Common Write and read registers Macros
+/** @defgroup EXTI_LL_EM_WRITE_READ Comm Write and read registers Macros
   * @{
   */
 

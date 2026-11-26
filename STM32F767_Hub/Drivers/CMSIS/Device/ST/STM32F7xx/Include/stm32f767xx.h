@@ -221,7 +221,7 @@ typedef struct
 
 typedef struct
 {
-  __IO uint32_t CSR;    /*!< ADC Common status register,                  Address offset: ADC1 base address + 0x300 */
+  __IO uint32_t CSR;    /*!< ADC Comm status register,                  Address offset: ADC1 base address + 0x300 */
   __IO uint32_t CCR;    /*!< ADC common control register,                 Address offset: ADC1 base address + 0x304 */
   __IO uint32_t CDR;    /*!< ADC common regular data register for dual
                              AND triple modes,                            Address offset: ADC1 base address + 0x308 */
@@ -597,7 +597,7 @@ typedef struct
 {
   __IO uint32_t PCR;        /*!< NAND Flash control register,                       Address offset: 0x80 */
   __IO uint32_t SR;         /*!< NAND Flash FIFO status and interrupt register,     Address offset: 0x84 */
-  __IO uint32_t PMEM;       /*!< NAND Flash Common memory space timing register,    Address offset: 0x88 */
+  __IO uint32_t PMEM;       /*!< NAND Flash Comm memory space timing register,    Address offset: 0x88 */
   __IO uint32_t PATT;       /*!< NAND Flash Attribute memory space timing register, Address offset: 0x8C */
   uint32_t      RESERVED0;  /*!< Reserved, 0x90                                                          */
   __IO uint32_t ECCR;       /*!< NAND Flash ECC result registers,                   Address offset: 0x94 */
@@ -8586,7 +8586,7 @@ typedef struct
 /******************  Bit definition for FMC_PMEM register  ******************/
 #define FMC_PMEM_MEMSET3_Pos       (0U)
 #define FMC_PMEM_MEMSET3_Msk       (0xFFUL << FMC_PMEM_MEMSET3_Pos)             /*!< 0x000000FF */
-#define FMC_PMEM_MEMSET3           FMC_PMEM_MEMSET3_Msk                        /*!<MEMSET3[7:0] bits (Common memory 3 setup time) */
+#define FMC_PMEM_MEMSET3           FMC_PMEM_MEMSET3_Msk                        /*!<MEMSET3[7:0] bits (Comm memory 3 setup time) */
 #define FMC_PMEM_MEMSET3_0         (0x01UL << FMC_PMEM_MEMSET3_Pos)             /*!< 0x00000001 */
 #define FMC_PMEM_MEMSET3_1         (0x02UL << FMC_PMEM_MEMSET3_Pos)             /*!< 0x00000002 */
 #define FMC_PMEM_MEMSET3_2         (0x04UL << FMC_PMEM_MEMSET3_Pos)             /*!< 0x00000004 */
@@ -8597,7 +8597,7 @@ typedef struct
 #define FMC_PMEM_MEMSET3_7         (0x80UL << FMC_PMEM_MEMSET3_Pos)             /*!< 0x00000080 */
 #define FMC_PMEM_MEMWAIT3_Pos      (8U)
 #define FMC_PMEM_MEMWAIT3_Msk      (0xFFUL << FMC_PMEM_MEMWAIT3_Pos)            /*!< 0x0000FF00 */
-#define FMC_PMEM_MEMWAIT3          FMC_PMEM_MEMWAIT3_Msk                       /*!<MEMWAIT3[7:0] bits (Common memory 3 wait time) */
+#define FMC_PMEM_MEMWAIT3          FMC_PMEM_MEMWAIT3_Msk                       /*!<MEMWAIT3[7:0] bits (Comm memory 3 wait time) */
 #define FMC_PMEM_MEMWAIT3_0        (0x01UL << FMC_PMEM_MEMWAIT3_Pos)            /*!< 0x00000100 */
 #define FMC_PMEM_MEMWAIT3_1        (0x02UL << FMC_PMEM_MEMWAIT3_Pos)            /*!< 0x00000200 */
 #define FMC_PMEM_MEMWAIT3_2        (0x04UL << FMC_PMEM_MEMWAIT3_Pos)            /*!< 0x00000400 */
@@ -8608,7 +8608,7 @@ typedef struct
 #define FMC_PMEM_MEMWAIT3_7        (0x80UL << FMC_PMEM_MEMWAIT3_Pos)            /*!< 0x00008000 */
 #define FMC_PMEM_MEMHOLD3_Pos      (16U)
 #define FMC_PMEM_MEMHOLD3_Msk      (0xFFUL << FMC_PMEM_MEMHOLD3_Pos)            /*!< 0x00FF0000 */
-#define FMC_PMEM_MEMHOLD3          FMC_PMEM_MEMHOLD3_Msk                       /*!<MEMHOLD3[7:0] bits (Common memory 3 hold time) */
+#define FMC_PMEM_MEMHOLD3          FMC_PMEM_MEMHOLD3_Msk                       /*!<MEMHOLD3[7:0] bits (Comm memory 3 hold time) */
 #define FMC_PMEM_MEMHOLD3_0        (0x01UL << FMC_PMEM_MEMHOLD3_Pos)            /*!< 0x00010000 */
 #define FMC_PMEM_MEMHOLD3_1        (0x02UL << FMC_PMEM_MEMHOLD3_Pos)            /*!< 0x00020000 */
 #define FMC_PMEM_MEMHOLD3_2        (0x04UL << FMC_PMEM_MEMHOLD3_Pos)            /*!< 0x00040000 */
@@ -8619,7 +8619,7 @@ typedef struct
 #define FMC_PMEM_MEMHOLD3_7        (0x80UL << FMC_PMEM_MEMHOLD3_Pos)            /*!< 0x00800000 */
 #define FMC_PMEM_MEMHIZ3_Pos       (24U)
 #define FMC_PMEM_MEMHIZ3_Msk       (0xFFUL << FMC_PMEM_MEMHIZ3_Pos)             /*!< 0xFF000000 */
-#define FMC_PMEM_MEMHIZ3           FMC_PMEM_MEMHIZ3_Msk                        /*!<MEMHIZ3[7:0] bits (Common memory 3 databus HiZ time) */
+#define FMC_PMEM_MEMHIZ3           FMC_PMEM_MEMHIZ3_Msk                        /*!<MEMHIZ3[7:0] bits (Comm memory 3 databus HiZ time) */
 #define FMC_PMEM_MEMHIZ3_0         (0x01UL << FMC_PMEM_MEMHIZ3_Pos)             /*!< 0x01000000 */
 #define FMC_PMEM_MEMHIZ3_1         (0x02UL << FMC_PMEM_MEMHIZ3_Pos)             /*!< 0x02000000 */
 #define FMC_PMEM_MEMHIZ3_2         (0x04UL << FMC_PMEM_MEMHIZ3_Pos)             /*!< 0x04000000 */

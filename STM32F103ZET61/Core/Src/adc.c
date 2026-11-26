@@ -40,7 +40,7 @@ void MX_ADC1_Init(void)
 
   /* USER CODE END ADC1_Init 1 */
 
-  /** Common config
+  /** Comm config
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;

@@ -323,7 +323,7 @@ typedef struct
   * @{
   */
 
-/** @defgroup USART_LL_EM_WRITE_READ Common Write and read registers Macros
+/** @defgroup USART_LL_EM_WRITE_READ Comm Write and read registers Macros
   * @{
   */
 

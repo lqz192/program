@@ -121,7 +121,7 @@ extern "C" {
   * @{
   */
 
-/** @defgroup PWR_LL_EM_WRITE_READ Common write and read registers Macros
+/** @defgroup PWR_LL_EM_WRITE_READ Comm write and read registers Macros
   * @{
   */
 

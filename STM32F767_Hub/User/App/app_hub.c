@@ -1,130 +1,187 @@
+/**
+ * @file    app_hub.c
+ * @brief   STM32F767 主控三路 F103 节点轮询调度器实现。
+ */
+
 #include "app_hub.h"
-
-#include <stdint.h>
-
 #include "link_uart.h"
 #include "usart.h"
-
 #include <stdio.h>
 #include <string.h>
 
-typedef struct {  // 每条链路持有独立的调度状态。
-    link_uart link;  // 接收状态和外设句柄。
-    uint16_t node;  // 对端节点号。
-    uint16_t seq;  // 本节点的请求序号。
-    uint32_t last_request_ms;  // 上一次安排请求的时间。
-    uint32_t sent_ms;  // 当前请求发送完成时间。
-    bool enabled;  // 接收中断是否初始化成功。
-    bool waiting;  // 是否正在等待此序号的应答。
-    bool probed;  // 收到匹配的 PONG 后开始 GET。
-} hub_node;  // 一条 F103 链路的上下文。
+#define HUB_POLL_PERIOD_MS          100U    // 单路节点轮询周期，单位 ms。
+#define HUB_RESPONSE_TIMEOUT_MS     75U     // 单次请求等待应答的超时阈值，单位 ms。
+#define HUB_MAX_TIMEOUTS            5U      // 连续超时达到此次数后退回 PING 重新握手。
+#define HUB_NODE_COUNT              (sizeof(nodes) / sizeof(nodes[0]))
 
-static hub_node nodes[2];
-static const uint32_t poll_period_ms = 100U;
-static const uint32_t response_timeout_ms = 75U;
-
-static void log_event(const char *event, const hub_node *node)  // 把链路状态输出到电脑。
-{  // 格式化一条包含节点和序号的诊断。
-    char line[48];  // 容纳诊断名和最大序号。
-    int length = snprintf(line, sizeof(line), "%s n=%u seq=%u", event, (unsigned)node->node, (unsigned)node->seq);  // 生成日志。
-    if (length > 0 && (size_t)length < sizeof(line))
-    {  // 只输出完整日志。
-        (void)link_uart_send(&huart1, line);  // 通过 CH340 发送到电脑。
-    }  // 完成诊断输出。
-}  // 日志函数结束。
-
-void app_hub_init(void)
+/**
+ * @brief  单路 F103 节点链路的调度上下文。
+ */
+typedef struct
 {
-    uint32_t now_ms = HAL_GetTick();  // 读取共同的起始时刻。
-    nodes[0].node = 1U;  // USART2 接节点 1。
-    nodes[0].last_request_ms = now_ms - poll_period_ms;  // 让第一路立即到期。
-    nodes[0].enabled = link_uart_start(&nodes[0].link, &huart2);  // 开启 USART2 接收。
-    nodes[1].node = 2U;  // USART6 接节点 2。
-    nodes[1].last_request_ms = now_ms - poll_period_ms / 2U;  // 第二路稍后到期。
-    nodes[1].enabled = link_uart_start(&nodes[1].link, &huart6);  // 开启 USART6 接收。
-    for (unsigned index = 0U; index < 2U; ++index)
-    {  // 检查两路启动状态。
-        if (!nodes[index].enabled)
-        {  // 某一路接收启动失败。
-            log_event("RX_START_ERR", &nodes[index]);  // 标记失败节点并保留另一条链路。
-        }  // 处理完该节点的启动结果。
-    }  // 完成启动检查。
+    link_uart link;             // 串口中断接收上下文与外设句柄。
+    uint16_t node;              // 对端从节点编号。
+    uint16_t seq;               // 当前请求序号（允许 uint16_t 自然回卷）。
+    uint32_t last_request_ms;   // 上一次发送/调度请求的毫秒时刻。
+    uint32_t sent_ms;           // 本轮请求发送完成的毫秒时刻。
+    bool enabled;               // 串口接收中断初始化成功标志。
+    bool waiting;               // 是否正在等待当前序号的应答。
+    bool probed;                // true 表示已通过 PING/PONG 握手，进入 GET 模式。
+    uint8_t timeout_count;      // 连续超时计数器。
+} hub_node;
 
+/**
+ * @brief  三路串口节点的静态硬件与交错起始配置表。
+ */
+typedef struct
+{
+    UART_HandleTypeDef *uart;   // 链路绑定的 HAL UART 句柄。
+    uint16_t node_id;           // 目标节点编号。
+    uint32_t init_lead_ms;      // 初始化时的时间提前量，用于错开多路轮询相位。
+} hub_node_config;
+
+static const hub_node_config node_configs[] = {
+    { &huart2, 1U, HUB_POLL_PERIOD_MS },        // 节点 1（USART2）：立即发起首次轮询。
+    { &huart6, 2U, HUB_POLL_PERIOD_MS / 2U },   // 节点 2（USART6）：错开约 50 ms。
+    { &huart3, 3U, HUB_POLL_PERIOD_MS / 4U }    // 节点 3（USART3）：错开约 75 ms。
+};
+
+static hub_node nodes[sizeof(node_configs) / sizeof(node_configs[0])];
+
+/**
+ * @brief  通过串口句柄查找对应的节点上下文。
+ * @param  uart HAL UART 句柄指针。
+ * @retval 匹配的节点指针；未找到时返回 NULL。
+ */
+static hub_node *find_node_by_uart(const UART_HandleTypeDef *uart)
+{
+    for (size_t index = 0U; index < HUB_NODE_COUNT; ++index)
+    {
+        if (nodes[index].link.uart == uart)
+        {
+            return &nodes[index];
+        }
+    }
+    return NULL;
 }
 
+/**
+ * @brief  向 PC 调试串口（USART1）输出一条链路诊断事件。
+ */
+static void log_event(const char *event, const hub_node *node)
+{
+    char line[48];
+    int length = snprintf(line, sizeof(line), "%s n=%u seq=%u",
+                          event, (unsigned)node->node, (unsigned)node->seq);
+    if (length > 0 && (size_t)length < sizeof(line))
+    {
+        (void)link_uart_send(&huart1, line);
+    }
+}
+
+/**
+ * @brief  推进单路节点的接收匹配、超时处理与下轮请求调度。
+ */
 static void service_node(hub_node *node, uint32_t now_ms)
 {
     if (!node->enabled)
-    {  // 跳过接收初始化失败的串口。
-        return;  // 让另一路继续服务。
-    }  // 当前链路可用。
-    char line[LINK_LINE_CAPACITY];  // 用同一缓冲接收应答或构造请求。
-    uint32_t received_ms;  // 由 UART 接收回调记录。
-    link_frame reply;  // 保存已经解析的应答头。
-    if (link_uart_take(&node->link, line, &received_ms) && node->waiting &&
-        received_ms - node->sent_ms < response_timeout_ms && link_parse(line, &reply) &&
-        reply.node == node->node && reply.seq == node->seq)
-    {  // 只接纳匹配当前请求的响应。
-        bool pong = !node->probed && strcmp(reply.type, "PONG") == 0 && reply.payload == NULL;  // 验证探测应答。
-        bool data = node->probed && strcmp(reply.type, "DATA") == 0 && reply.payload != NULL &&  // 验证数据应答。
-                    strchr(reply.payload, '|') != NULL;  // 检查两条样本有分隔符。
-        if (pong || data)
-        {  // 收到预期的应答类型。
-            node->waiting = false;  // 完成本次请求。
-            node->probed = true;  // 后续按数据请求模式轮询。
-            (void)link_uart_send(&huart1, line);  // 把原应答转发给电脑。
-        }  // 畸形应答继续等待，最终由超时处理。
-    }  // 完成本轮接收检查。
-    if (node->waiting && now_ms - node->sent_ms >= response_timeout_ms)
     {
-        node->waiting = false;  // 当前序号失效。
-        log_event("TIMEOUT", node);  // 未收到在期限内到达的匹配应答。
+        return;
     }
-    if (node->waiting || now_ms - node->last_request_ms < poll_period_ms)
-    {  // 每路最多一条请求在途。
-        return;  // 等现有请求完成或下个周期。
-    }  // 本轮可以安排新请求。
-    node->last_request_ms = now_ms;  // 记录本次请求调度时刻。
-    ++node->seq;  // 递增 uint16_t 序号，允许自然回卷。
-    int length = snprintf(line, sizeof(line), "%s,%u,%u", node->probed ? "GET" : "PING",  // 选择数据或探测请求。
-                          (unsigned)node->node, (unsigned)node->seq);  // 加入目标节点和请求序号。
-    if (length > 0 && (size_t)length < sizeof(line) && link_uart_send(node->link.uart, line))
-    {  // 发送完整请求。
-        node->sent_ms = HAL_GetTick();  // 发送完成后开始等待计时。
-        node->waiting = true;  // 等待匹配的应答。
+
+    char line[LINK_LINE_CAPACITY];
+    uint32_t received_ms = 0U;
+    link_frame reply;
+
+    if (link_uart_take(&node->link, line, &received_ms) && node->waiting &&
+        received_ms - node->sent_ms < HUB_RESPONSE_TIMEOUT_MS &&
+        link_parse(line, &reply) &&
+        reply.node == node->node && reply.seq == node->seq)
+    {
+        bool is_pong = !node->probed && strcmp(reply.type, "PONG") == 0 && reply.payload == NULL;
+        bool is_data = node->probed && strcmp(reply.type, "DATA") == 0 &&
+                       reply.payload != NULL && strchr(reply.payload, '|') != NULL;
+        if (is_pong || is_data)
+        {
+            node->waiting = false;
+            node->probed = true;
+            node->timeout_count = 0U;
+            (void)link_uart_send(&huart1, line);  // 将合法应答原样转发至上位机。
+        }
+    }
+
+    if (node->waiting && now_ms - node->sent_ms >= HUB_RESPONSE_TIMEOUT_MS)
+    {
+        node->waiting = false;
+        ++node->timeout_count;
+        if (node->timeout_count >= HUB_MAX_TIMEOUTS)
+        {
+            node->probed = false;  // 连续多次超时后退回 PING，以探测节点重启或重新上线。
+            node->timeout_count = 0U;
+        }
+        log_event("TIMEOUT", node);
+    }
+
+    if (node->waiting || now_ms - node->last_request_ms < HUB_POLL_PERIOD_MS)
+    {
+        return;
+    }
+
+    node->last_request_ms = now_ms;
+    ++node->seq;
+    int length = snprintf(line, sizeof(line), "%s,%u,%u",
+                          node->probed ? "GET" : "PING",
+                          (unsigned)node->node, (unsigned)node->seq);
+    if (length > 0 && (size_t)length < sizeof(line) &&
+        link_uart_send(node->link.uart, line))
+    {
+        node->sent_ms = HAL_GetTick();
+        node->waiting = true;
     }
     else
-    {  // 格式化或串口发送失败。
-        log_event("TX_ERR", node);  // 记录失败并在下个周期重试。
-    }  // 完成发送结果处理。
+    {
+        log_event("TX_ERR", node);
+    }
 }
 
-void app_hub_run(void)  // 主循环连续调用。
-{  // 用每条链路实际被处理时的时间调度。
-    service_node(&nodes[0], HAL_GetTick());  // 处理 USART2 与节点 1。
-    service_node(&nodes[1], HAL_GetTick());  // 处理 USART6 与节点 2。
-}  // 两条链路都已处理。
+void app_hub_init(void)
+{
+    uint32_t now_ms = HAL_GetTick();
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)  // HAL 字节接收回调。
-{  // 按实际 UART 分派。
-    if (uart == &huart2)
-    {  // 节点 1 的链路。
-        link_uart_on_rx(&nodes[0].link);  // 保存字节并继续接收。
+    for (size_t index = 0U; index < HUB_NODE_COUNT; ++index)
+    {
+        nodes[index].node = node_configs[index].node_id;
+        nodes[index].last_request_ms = now_ms - node_configs[index].init_lead_ms;
+        nodes[index].enabled = link_uart_start(&nodes[index].link, node_configs[index].uart);
+        if (!nodes[index].enabled)
+        {
+            log_event("RX_START_ERR", &nodes[index]);
+        }
     }
-    else if (uart == &huart6)
-    {  // 节点 2 的链路。
-        link_uart_on_rx(&nodes[1].link);  // 保存字节并继续接收。
-    }  // 忽略其他串口的回调。
-}  // 接收分派结束。
+}
 
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart)  // HAL 串口错误回调。
-{  // 按发生错误的 UART 恢复。
-    if (uart == &huart2)
-    {  // 节点 1 的链路。
-        link_uart_on_error(&nodes[0].link);  // 丢弃损坏的行。
+void app_hub_run(void)
+{
+    for (size_t index = 0U; index < HUB_NODE_COUNT; ++index)
+    {
+        service_node(&nodes[index], HAL_GetTick());
     }
-    else if (uart == &huart6)
-    {  // 节点 2 的链路。
-        link_uart_on_error(&nodes[1].link);  // 丢弃损坏的行。
-    }  // 其余串口按项目已有逻辑处理。
-}  // 错误分派结束。
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *uart)
+{
+    hub_node *node = find_node_by_uart(uart);
+    if (node != NULL)
+    {
+        link_uart_on_rx(&node->link);
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart)
+{
+    hub_node *node = find_node_by_uart(uart);
+    if (node != NULL)
+    {
+        link_uart_on_error(&node->link);
+    }
+}

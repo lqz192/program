@@ -923,7 +923,7 @@ typedef struct
   * @{
   */
 
-/** @defgroup TIM_LL_EM_WRITE_READ Common Write and read registers Macros
+/** @defgroup TIM_LL_EM_WRITE_READ Comm Write and read registers Macros
   * @{
   */
 /**

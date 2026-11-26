@@ -937,7 +937,7 @@ typedef struct
   * @{
   */
 
-/** @defgroup ADC_LL_EM_WRITE_READ Common write and read registers Macros
+/** @defgroup ADC_LL_EM_WRITE_READ Comm write and read registers Macros
   * @{
   */
 

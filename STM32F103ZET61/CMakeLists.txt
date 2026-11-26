@@ -54,6 +54,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
         User/App/app_adc.h        # 将应用头文件关联到 CLion 项目目标。
         User/App/app_node_link.c  # 编译本板节点协议。
         User/Comm/link_uart.c     # 编译本板串口收发。
+        User/Bsp/debug_uart.c     # 编译调试串口封装。
+        User/Bsp/debug_uart.h
 )
 
 # Add include paths
@@ -62,6 +64,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         User/Drivers
         User/App
         User/Comm
+        User/Bsp
 )
 
 # Add project symbols (macros)

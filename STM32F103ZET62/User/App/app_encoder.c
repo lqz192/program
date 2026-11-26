@@ -1,47 +1,51 @@
+/**
+ * @file    app_encoder.c
+ * @brief   正交编码器周期采样与发布应用实现。
+ */
+
 #include "app_encoder.h"
-#include "app_node_link.h"  // 发布编码器的计数结果。
+#include "app_node_link.h"
 #include "debug_uart.h"
 #include "encoder.h"
-
 #include <stdbool.h>
 #include <stdio.h>
 
-static const uint32_t sample_period_ms = 10U;
-static const uint32_t log_period_ms = 100U;
+#define ENCODER_SAMPLE_MS   10U     // 硬件计数器采样周期（防 16 位溢出），单位 ms。
+#define ENCODER_LOG_MS      100U    // 发布与日志输出周期，单位 ms。
 
-static bool encoder_ready;
-static uint32_t last_sample_ms;
-static uint32_t last_log_ms;
+static bool sensor_ready;           // 编码器启动状态标志。
+static uint32_t last_sample_ms;     // 上次采样时刻，单位 ms。
+static uint32_t last_log_ms;        // 上次发布日志时刻，单位 ms。
 
 void app_encoder_init(uint32_t now_ms)
 {
     last_sample_ms = now_ms;
     last_log_ms = now_ms;
-    encoder_ready = encoder_start() == HAL_OK;
-    if (!encoder_ready)
+    sensor_ready = (encoder_start() == HAL_OK);
+    if (!sensor_ready)
     {
-        send_line("ENC START_ERR\r\n");  // 发送编码器启动错误日志。
+        send_line("ENC START_ERR\r\n");
     }
 }
 
 void app_encoder_run(uint32_t now_ms)
 {
-    if (!encoder_ready || now_ms - last_sample_ms < sample_period_ms)
+    if (!sensor_ready || now_ms - last_sample_ms < ENCODER_SAMPLE_MS)
     {
         return;
     }
     last_sample_ms = now_ms;
+
     int32_t count = encoder_read_count();
-    if (now_ms - last_log_ms >= log_period_ms)
+    if (now_ms - last_log_ms >= ENCODER_LOG_MS)
     {
         last_log_ms = now_ms;
-        char line[32];// 为一行计数日志分配栈上缓冲区。
-        int length = snprintf(line, sizeof(line), "ENC count=%ld\r\n", (long)count);  // 格式化计数日志并取得所需长度。
+        char line[32];
+        int length = snprintf(line, sizeof(line), "ENC count=%ld\r\n", (long)count);
         if (length > 0 && (size_t)length < sizeof(line))
-        {  // 只发送格式化成功且完整的一行。
-            app_node_sample_update(node_first, line);  // 保存本次计数供调度器读取。
-            send_line(line);  // 通过调试串口输出本次计数。
-        }  // 结束日志长度检查。
-    }  // 结束本轮计数日志输出。
+        {
+            app_node_sample_update(node_first, line);
+            send_line(line);
+        }
+    }
 }
-

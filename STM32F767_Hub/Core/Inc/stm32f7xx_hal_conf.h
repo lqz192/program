@@ -227,7 +227,7 @@
 #define PHY_READ_TO                     ((uint32_t)0x0000FFFFU)
 #define PHY_WRITE_TO                    ((uint32_t)0x0000FFFFU)
 
-/* Section 3: Common PHY Registers */
+/* Section 3: Comm PHY Registers */
 
 #define PHY_BCR                         ((uint16_t)0x0000U)    /*!< Transceiver Basic Control Register   */
 #define PHY_BSR                         ((uint16_t)0x0001U)    /*!< Transceiver Basic Status Register    */

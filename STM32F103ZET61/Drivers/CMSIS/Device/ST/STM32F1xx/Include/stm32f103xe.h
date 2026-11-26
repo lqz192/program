@@ -446,7 +446,7 @@ typedef struct
 {
   __IO uint32_t PCR2;       /*!< NAND Flash control register 2,                       Address offset: 0x60 */
   __IO uint32_t SR2;        /*!< NAND Flash FIFO status and interrupt register 2,     Address offset: 0x64 */
-  __IO uint32_t PMEM2;      /*!< NAND Flash Common memory space timing register 2,    Address offset: 0x68 */
+  __IO uint32_t PMEM2;      /*!< NAND Flash Comm memory space timing register 2,    Address offset: 0x68 */
   __IO uint32_t PATT2;      /*!< NAND Flash Attribute memory space timing register 2, Address offset: 0x6C */
   uint32_t      RESERVED0;  /*!< Reserved, 0x70                                                            */
   __IO uint32_t ECCR2;      /*!< NAND Flash ECC result registers 2,                   Address offset: 0x74 */
@@ -454,7 +454,7 @@ typedef struct
   uint32_t      RESERVED2;  /*!< Reserved, 0x7C                                                            */
   __IO uint32_t PCR3;       /*!< NAND Flash control register 3,                       Address offset: 0x80 */
   __IO uint32_t SR3;        /*!< NAND Flash FIFO status and interrupt register 3,     Address offset: 0x84 */
-  __IO uint32_t PMEM3;      /*!< NAND Flash Common memory space timing register 3,    Address offset: 0x88 */
+  __IO uint32_t PMEM3;      /*!< NAND Flash Comm memory space timing register 3,    Address offset: 0x88 */
   __IO uint32_t PATT3;      /*!< NAND Flash Attribute memory space timing register 3, Address offset: 0x8C */
   uint32_t      RESERVED3;  /*!< Reserved, 0x90                                                            */
   __IO uint32_t ECCR3;      /*!< NAND Flash ECC result registers 3,                   Address offset: 0x94 */
@@ -5359,7 +5359,7 @@ typedef struct
 /******************  Bit definition for FSMC_PMEMx (x = 2 to 4) register  ******************/
 #define FSMC_PMEMx_MEMSETx_Pos              (0U)                               
 #define FSMC_PMEMx_MEMSETx_Msk              (0xFFUL << FSMC_PMEMx_MEMSETx_Pos)  /*!< 0x000000FF */
-#define FSMC_PMEMx_MEMSETx                  FSMC_PMEMx_MEMSETx_Msk             /*!< MEMSETx[7:0] bits (Common memory x setup time) */
+#define FSMC_PMEMx_MEMSETx                  FSMC_PMEMx_MEMSETx_Msk             /*!< MEMSETx[7:0] bits (Comm memory x setup time) */
 #define FSMC_PMEMx_MEMSETx_0                (0x01UL << FSMC_PMEMx_MEMSETx_Pos)  /*!< 0x00000001 */
 #define FSMC_PMEMx_MEMSETx_1                (0x02UL << FSMC_PMEMx_MEMSETx_Pos)  /*!< 0x00000002 */
 #define FSMC_PMEMx_MEMSETx_2                (0x04UL << FSMC_PMEMx_MEMSETx_Pos)  /*!< 0x00000004 */
@@ -5371,7 +5371,7 @@ typedef struct
 
 #define FSMC_PMEMx_MEMWAITx_Pos             (8U)                               
 #define FSMC_PMEMx_MEMWAITx_Msk             (0xFFUL << FSMC_PMEMx_MEMWAITx_Pos) /*!< 0x0000FF00 */
-#define FSMC_PMEMx_MEMWAITx                 FSMC_PMEMx_MEMWAITx_Msk            /*!< MEMWAITx[7:0] bits (Common memory x wait time) */
+#define FSMC_PMEMx_MEMWAITx                 FSMC_PMEMx_MEMWAITx_Msk            /*!< MEMWAITx[7:0] bits (Comm memory x wait time) */
 #define FSMC_PMEMx_MEMWAIT2_0               0x00000100U                        /*!< Bit 0 */
 #define FSMC_PMEMx_MEMWAITx_1               0x00000200U                        /*!< Bit 1 */
 #define FSMC_PMEMx_MEMWAITx_2               0x00000400U                        /*!< Bit 2 */
@@ -5383,7 +5383,7 @@ typedef struct
 
 #define FSMC_PMEMx_MEMHOLDx_Pos             (16U)                              
 #define FSMC_PMEMx_MEMHOLDx_Msk             (0xFFUL << FSMC_PMEMx_MEMHOLDx_Pos) /*!< 0x00FF0000 */
-#define FSMC_PMEMx_MEMHOLDx                 FSMC_PMEMx_MEMHOLDx_Msk            /*!< MEMHOLDx[7:0] bits (Common memory x hold time) */
+#define FSMC_PMEMx_MEMHOLDx                 FSMC_PMEMx_MEMHOLDx_Msk            /*!< MEMHOLDx[7:0] bits (Comm memory x hold time) */
 #define FSMC_PMEMx_MEMHOLDx_0               (0x01UL << FSMC_PMEMx_MEMHOLDx_Pos) /*!< 0x00010000 */
 #define FSMC_PMEMx_MEMHOLDx_1               (0x02UL << FSMC_PMEMx_MEMHOLDx_Pos) /*!< 0x00020000 */
 #define FSMC_PMEMx_MEMHOLDx_2               (0x04UL << FSMC_PMEMx_MEMHOLDx_Pos) /*!< 0x00040000 */
@@ -5395,7 +5395,7 @@ typedef struct
 
 #define FSMC_PMEMx_MEMHIZx_Pos              (24U)                              
 #define FSMC_PMEMx_MEMHIZx_Msk              (0xFFUL << FSMC_PMEMx_MEMHIZx_Pos)  /*!< 0xFF000000 */
-#define FSMC_PMEMx_MEMHIZx                  FSMC_PMEMx_MEMHIZx_Msk             /*!< MEMHIZx[7:0] bits (Common memory x databus HiZ time) */
+#define FSMC_PMEMx_MEMHIZx                  FSMC_PMEMx_MEMHIZx_Msk             /*!< MEMHIZx[7:0] bits (Comm memory x databus HiZ time) */
 #define FSMC_PMEMx_MEMHIZx_0                (0x01UL << FSMC_PMEMx_MEMHIZx_Pos)  /*!< 0x01000000 */
 #define FSMC_PMEMx_MEMHIZx_1                (0x02UL << FSMC_PMEMx_MEMHIZx_Pos)  /*!< 0x02000000 */
 #define FSMC_PMEMx_MEMHIZx_2                (0x04UL << FSMC_PMEMx_MEMHIZx_Pos)  /*!< 0x04000000 */
@@ -6300,7 +6300,7 @@ typedef struct
 #define USB_EP7R_CTR_RX_Msk                     (0x1UL << USB_EP7R_CTR_RX_Pos)  /*!< 0x00008000 */
 #define USB_EP7R_CTR_RX                         USB_EP7R_CTR_RX_Msk            /*!< Correct Transfer for reception */
 
-/*!< Common registers */
+/*!< Comm registers */
 /*******************  Bit definition for USB_CNTR register  *******************/
 #define USB_CNTR_FRES_Pos                       (0U)                           
 #define USB_CNTR_FRES_Msk                       (0x1UL << USB_CNTR_FRES_Pos)    /*!< 0x00000001 */

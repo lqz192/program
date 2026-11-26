@@ -382,7 +382,7 @@ typedef struct
   * @{
   */
 
-/** @defgroup DMA_LL_EM_WRITE_READ Common Write and read registers macros
+/** @defgroup DMA_LL_EM_WRITE_READ Comm Write and read registers macros
   * @{
   */
 /**

@@ -1,18 +1,76 @@
+/**
+ * @file    link_uart.c
+ * @brief   板间 ASCII 协议帧的串口中断收发与帧头解析实现。
+ */
+
 #include "link_uart.h"
 #include <stdio.h>
 #include <string.h>
 
-bool link_uart_start(link_uart *link, UART_HandleTypeDef *uart)
+#define LINK_TX_TIMEOUT_MS 30U  // 阻塞发送单帧数据的最大等待时间，单位 ms。
+
+/**
+ * @brief  重新挂载单字节中断接收，失败时置位恢复标志。
+ * @param  link 接收上下文指针。
+ */
+static void restart_rx_it(link_uart *link)
 {
-    *link = (link_uart){ .uart =uart};
-    return HAL_UART_Receive_IT(uart, &link->rx_byte ,1U) == HAL_OK ;
+    if (HAL_UART_Receive_IT(link->uart, &link->rx_byte, 1U) != HAL_OK)
+    {
+        link->rx_restart_needed = true;
+        return;
+    }
+    link->rx_restart_needed = false;
 }
 
-void link_uart_on_rx( link_uart *link)
+/**
+ * @brief  从字符串游标处解析一个十进制 uint16_t 字段。
+ * @param  cursor 输入输出参数，传入起始位置，成功时推进到数字末尾之后。
+ * @param  out    输出解析得到的 16 位无符号整数。
+ * @retval true 解析成功且未溢出；false 字段为空、非数字或超出 uint16_t 范围。
+ */
+static bool read_u16(const char **cursor, uint16_t *out)
+{
+    const char *field = *cursor;
+    uint32_t value = 0U;
+
+    if (*field < '0' || *field > '9')
+    {
+        return false;  // 至少需要一位数字，拒绝空字段或符号前缀。
+    }
+
+    do
+    {
+        value = value * 10U + (uint32_t)(*field++ - '0');
+        if (value > UINT16_MAX)
+        {
+            return false;
+        }
+    } while (*field >= '0' && *field <= '9');
+
+    *cursor = field;
+    *out = (uint16_t)value;
+    return true;
+}
+
+bool link_uart_start(link_uart *link, UART_HandleTypeDef *uart)
+{
+    *link = (link_uart){ .uart = uart };
+    __HAL_UART_CLEAR_OREFLAG(uart);  // 启动前清除可能残留的溢出错误标志。
+    bool started = HAL_UART_Receive_IT(uart, &link->rx_byte, 1U) == HAL_OK;
+    link->rx_restart_needed = !started;
+    return started;
+}
+
+void link_uart_on_rx(link_uart *link)
 {
     if (HAL_UART_GetError(link->uart) != HAL_UART_ERROR_NONE)
     {
-        return;  // 让 HAL 继续处理错误，并由错误回调恢复接收。
+        __HAL_UART_CLEAR_OREFLAG(link->uart);
+        link->used = 0U;
+        link->discard = true;  // 丢弃损坏半包，等待下一个换行符重新同步。
+        restart_rx_it(link);
+        return;
     }
 
     uint8_t byte = link->rx_byte;
@@ -21,113 +79,106 @@ void link_uart_on_rx( link_uart *link)
         if (!link->ready && !link->discard && link->used != 0U)
         {
             link->line[link->used] = '\0';
-            link->received_ms = HAL_GetTick();  // 记录完整应答到达时间。
+            link->received_ms = HAL_GetTick();
             link->ready = true;  // 发布完整行，供主循环读取。
         }
         link->used = 0U;
         link->discard = false;
     }
-    else if (byte != '\r' && !link->discard )
+    else if (byte != '\r' && !link->discard)
     {
+        // 缓冲区已被上层占用、遇到非可打印 ASCII 或行长超限时丢弃至行尾。
         if (link->ready || byte < 32U || byte > 126U || link->used >= LINK_LINE_CAPACITY - 1U)
-        {  // 检查占用、ASCII 与长度。
-            link->discard = true;  // 丢到换行并保留已经发布的行。
+        {
+            link->discard = true;
         }
         else
-        {  // 当前字节可以追加。
-            link->line[link->used++] = (char)byte;  // 保存字符并递增长度。
-        }  // 完成本字节入队。
-    }  // 完成字节分类。
-    (void)HAL_UART_Receive_IT(link->uart, &link->rx_byte, 1U);  // 继续接收下一个字节。
+        {
+            link->line[link->used++] = (char)byte;
+        }
+    }
+
+    restart_rx_it(link);
 }
 
 void link_uart_on_error(link_uart *link)
 {
-    link->used = 0U;  // 丢弃尚未发布的行。
-    link->discard = true;  // 等到换行再接收下一帧。
-    (void)HAL_UART_Receive_IT(link->uart, &link->rx_byte, 1U);  // 接收已终止时重新启动。
+    __HAL_UART_CLEAR_OREFLAG(link->uart);
+    link->used = 0U;
+    link->discard = true;  // 丢弃出错帧的残余字节，直至下一个换行符。
+    restart_rx_it(link);
 }
 
 bool link_uart_take(link_uart *link, char line[LINK_LINE_CAPACITY], uint32_t *received_ms)
 {
+    if (link->rx_restart_needed)
+    {
+        restart_rx_it(link);  // 中断侧重启失败时由主循环兜底恢复接收。
+    }
     if (!link->ready)
-    {  // 检查是否有完整行。
-        return false;  // 没有完整行就继续其他任务。
-    }  // 本次有一帧可读。
-    uint16_t index = 0U;  // 从首字节开始复制。
+    {
+        return false;
+    }
+
+    uint16_t index = 0U;
     do
-    {  // 复制正文和 NUL。
-        line[index] = link->line[index];  // 读取中断发布的字符。
-    } while (line[index++] != '\0');  // 遇到字符串结束符停止。
+    {
+        line[index] = link->line[index];
+    } while (line[index++] != '\0');
+
     if (received_ms != NULL)
     {
-        *received_ms = link->received_ms;  // 释放缓冲前取走该帧的到达时间。
+        *received_ms = link->received_ms;
     }
-    link->ready = false;  // 释放共享行缓冲。
-    return true;  // 调用方得到一条完整行。
+    link->ready = false;  // 必须在拷贝完数据后再释放行缓冲区。
+    return true;
 }
 
 bool link_uart_send(UART_HandleTypeDef *uart, const char *line)
 {
     char wire[LINK_LINE_CAPACITY + 1U];
-    int length = snprintf(wire, sizeof(wire), "%s\n", line);  // 形成单条 ASCII 帧。
+    int length = snprintf(wire, sizeof(wire), "%s\n", line);
     if (length <= 0 || (size_t)length >= sizeof(wire))
-    {  // 发送前排除格式化失败或截断。
-        return false;  // 让调用方处理发送失败。
-    }  // 缓冲区现有完整帧。
-    return HAL_UART_Transmit(uart, (uint8_t *)wire, (uint16_t)length, 30U) == HAL_OK;  // 发送有效字节并限制等待时间。
-}
-
-static bool read_u16(const char **custor, uint16_t *out)
-{
-    const char *field = *custor;
-    uint32_t value = 0;
-    if (*field < '0' || *field > '9')
-    {  // 至少需要一位数字。
-        return false;  // 拒绝空字段和符号。
-    }  // 首字符合法。
-    do
     {
-        value = value * 10U + (uint32_t )(*field++ - '0');
-        if (value > UINT16_MAX)
-        {
-            return false;
-        }
-    }while (*field >= '0' && *field <= '9');
-    *custor = field;
-    *out = (uint16_t )value;
-    return true;
+        return false;
+    }
+    return HAL_UART_Transmit(uart, (uint8_t *)wire, (uint16_t)length, LINK_TX_TIMEOUT_MS) == HAL_OK;
 }
 
 bool link_parse(const char *line, link_frame *frame)
 {
-    const char *comma = strchr(line,',');
+    const char *comma = strchr(line, ',');
     if (comma == NULL || comma == line || (size_t)(comma - line) >= sizeof(frame->type))
     {
         return false;
     }
-    size_t type_length = (size_t)(comma - line);  // 计算类型字符串长度。
-    memcpy(frame->type, line, type_length);  // 拷贝类型字段。
-    frame->type[type_length] = '\0';  // 为 strcmp 补上 NUL。
-    const char *field = comma + 1;  // 指到节点号字段。
+
+    size_t type_length = (size_t)(comma - line);
+    memcpy(frame->type, line, type_length);
+    frame->type[type_length] = '\0';
+
+    const char *field = comma + 1;
     if (!read_u16(&field, &frame->node) || *field != ',')
-    {  // 检查节点号及其后的逗号。
-        return false;  // 节点号无效。
-    }  // 准备解析序号。
-    ++field;  // 跳过节点号末尾的逗号。
+    {
+        return false;
+    }
+    ++field;  // 跳过节点号后的逗号。
+
     if (!read_u16(&field, &frame->seq))
-    {  // 读取请求序号。
-        return false;  // 序号无效。
-    }  // 序号合法。
+    {
+        return false;
+    }
+
     if (*field == '\0')
-    {  // PING、PONG、GET 没有正文。
-        frame->payload = NULL;  // 用空指针表示正文缺失。
-        return true;  // 接收该帧头。
-    }  // 还有字符时需要正文分隔符。
+    {
+        frame->payload = NULL;  // 无正文的控制帧（PING / PONG / GET）。
+        return true;
+    }
     if (*field != ',' || field[1] == '\0')
-    {  // 正文前应有逗号，正文自身不能为空。
-        return false;  // 拒绝异常尾部。
-    }  // 正文格式初步有效。
-    frame->payload = field + 1;  // 正文仍指向调用者的行缓冲。
-    return true;  // 帧头解析完成。
+    {
+        return false;  // 正文前必须有逗号且正文不能为空。
+    }
+
+    frame->payload = field + 1;  // 正文直接指向调用方提供的行缓冲。
+    return true;
 }

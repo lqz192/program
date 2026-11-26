@@ -1,7 +1,19 @@
-#ifndef APP_IMU_H  // 首次包含时导入应用接口。
-#define APP_IMU_H  // 防止重复处理本头文件的内容。
+/**
+ * @file    app_imu.h
+ * @brief   MPU6050 六轴周期采集与发布应用接口。
+ */
 
-void app_imu_init(void);  // 外设初始化完成后启动采集应用。
-void app_imu_run(void);   // 从主循环反复调用，按时间执行采集或重试。
+#ifndef APP_IMU_H
+#define APP_IMU_H
 
-#endif  // 结束 APP_IMU_H 保护区。
+/**
+ * @brief  初始化 I2C1 上的 MPU6050 传感器并记录起始时间。
+ */
+void app_imu_init(void);
+
+/**
+ * @brief  主循环轮询，按周期采样六轴数据或在故障后定时重连。
+ */
+void app_imu_run(void);
+
+#endif  /* APP_IMU_H */

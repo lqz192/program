@@ -25,9 +25,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "app_encoder.h"  // 提供编码器应用的初始化和运行函数声明。
-#include "app_tof.h"      // 提供测距应用的初始化和运行函数声明。
-#include "app_node_link.h"  // 引入节点通信接口。
+#include "app_encoder.h"    // 编码器采样应用接口。
+#include "app_tof.h"        // VL53L0X 测距应用接口。
+#include "app_node_link.h"  // 从节点板间通信接口。
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -96,9 +96,9 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  app_encoder_init(HAL_GetTick());  // 用当前毫秒时间初始化编码器应用。
-  app_tof_init();  // 初始化测距应用并启动传感器。
-  app_node_link_init(2U);  // 在 USART2 启动节点 2 的接收。
+  app_encoder_init(HAL_GetTick());  // 启动 TIM8 编码器并初始化采样计时器。
+  app_tof_init();                   // 初始化 I2C2 上的 VL53L0X。
+  app_node_link_init(2U);           // 在 USART2 启动节点 2 通信监听。
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -108,10 +108,10 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    app_node_link_run();  // 处理调度器发来的请求。
-    uint32_t now_ms = HAL_GetTick();  // 在主循环本轮读取一次当前毫秒时间。
-    app_encoder_run(now_ms);  // 用本轮时间调度编码器采集与日志。
-    app_tof_run(now_ms);  // 用同一时刻调度测距轮询与日志。
+    app_node_link_run();              // 响应 Hub 发来的 PING / GET 请求。
+    uint32_t now_ms = HAL_GetTick();  // 本轮循环统一获取当前毫秒时间戳。
+    app_encoder_run(now_ms);          // 按周期采样编码器并更新第一槽。
+    app_tof_run(now_ms);              // 按周期轮询测距并更新第二槽。
   }
   /* USER CODE END 3 */
 }
@@ -128,10 +128,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -141,12 +143,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
