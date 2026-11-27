@@ -24,7 +24,8 @@ typedef struct
     volatile bool ready;                        // true 表示行缓冲区已有完整帧待取走。
     uint16_t used;                              // 当前正在接收的行长度（仅中断维护）。
     bool discard;                               // 丢弃当前异常行，直至下一个换行符恢复同步。
-    volatile bool rx_restart_needed;            // 中断侧重启接收失败时由主循环兜底恢复。
+    volatile bool rx_restart_needed;            // 中断侧或启动时挂接接收失败，需主循环低频重试。
+    uint32_t last_restart_ms;                   // 最近一次尝试挂载接收中断的毫秒时刻。
 } link_uart;
 
 /**

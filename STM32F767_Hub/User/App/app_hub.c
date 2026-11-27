@@ -84,16 +84,19 @@ static void log_event(const char *event, const hub_node *node)
  */
 static void service_node(hub_node *node, uint32_t now_ms)
 {
+    char line[LINK_LINE_CAPACITY];
+    uint32_t received_ms = 0U;
+    link_frame reply;
+
+    // 即使首次启动接收失败，也必须进入 link_uart_take() 执行低频恢复重试。
+    bool has_line = link_uart_take(&node->link, line, &received_ms);
+    node->enabled = !node->link.rx_restart_needed;
     if (!node->enabled)
     {
         return;
     }
 
-    char line[LINK_LINE_CAPACITY];
-    uint32_t received_ms = 0U;
-    link_frame reply;
-
-    if (link_uart_take(&node->link, line, &received_ms) && node->waiting &&
+    if (has_line && node->waiting &&
         received_ms - node->sent_ms < HUB_RESPONSE_TIMEOUT_MS &&
         link_parse(line, &reply) &&
         reply.node == node->node && reply.seq == node->seq)

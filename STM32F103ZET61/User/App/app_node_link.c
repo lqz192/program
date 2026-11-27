@@ -78,7 +78,10 @@ void app_node_link_run(void)
     char line[LINK_LINE_CAPACITY];
     link_frame request;
 
-    if (!link_ready || !link_uart_take(&node_link, line, NULL) || !link_parse(line, &request))
+    // 先调用 link_uart_take() 驱动低频接收恢复，避免启动失败时被 link_ready 短路。
+    bool has_line = link_uart_take(&node_link, line, NULL);
+    link_ready = !node_link.rx_restart_needed;
+    if (!link_ready || !has_line || !link_parse(line, &request))
     {
         return;
     }

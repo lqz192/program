@@ -123,7 +123,7 @@ ms5837_status ms5837_poll(I2C_HandleTypeDef *bus, uint32_t now_ms,
         {
             return ms5837_io_error;
         }
-        conv_start_ms = now_ms;
+        conv_start_ms = HAL_GetTick();  // 在 D1 命令实际发送完成后起算等待时间。
         conv_state = ms5837_state_wait_d1;
         return ms5837_pending;
 
@@ -137,7 +137,7 @@ ms5837_status ms5837_poll(I2C_HandleTypeDef *bus, uint32_t now_ms,
             conv_state = ms5837_state_idle;
             return ms5837_io_error;
         }
-        conv_start_ms = now_ms;
+        conv_start_ms = HAL_GetTick();  // 在 D2 命令实际发送完成后起算等待时间，避免被读 D1 耗时吞掉。
         conv_state = ms5837_state_wait_d2;
         return ms5837_pending;
 

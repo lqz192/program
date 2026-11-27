@@ -13,6 +13,8 @@
 #define TOF_MEAS_PERIOD_MS  100U            // 连续定时测距间隔，单位 ms。
 
 static VL53L0X_Dev_t tof_device;            // ST 官方 API 设备上下文。
+static bool offset_saved;                   // 首次上电已成功备份 NVM 偏移校准值标志。
+static int32_t saved_offset_um;             // 备份的出厂偏移校准值，单位 um。
 
 bool tof_start(void)
 {
@@ -32,8 +34,29 @@ bool tof_start(void)
         return false;
     }
 
-    return VL53L0X_DataInit(&tof_device) == VL53L0X_ERROR_NONE &&
-           VL53L0X_StaticInit(&tof_device) == VL53L0X_ERROR_NONE &&
+    if (VL53L0X_DataInit(&tof_device) != VL53L0X_ERROR_NONE)
+    {
+        return false;
+    }
+
+    // ST API 约束：持续通电下重复调用 DataInit() 必须保存/恢复偏移校准，防止测距产生偏移误差。
+    if (!offset_saved)
+    {
+        if (VL53L0X_GetOffsetCalibrationDataMicroMeter(&tof_device, &saved_offset_um) != VL53L0X_ERROR_NONE)
+        {
+            return false;
+        }
+        offset_saved = true;
+    }
+    else
+    {
+        if (VL53L0X_SetOffsetCalibrationDataMicroMeter(&tof_device, saved_offset_um) != VL53L0X_ERROR_NONE)
+        {
+            return false;
+        }
+    }
+
+    return VL53L0X_StaticInit(&tof_device) == VL53L0X_ERROR_NONE &&
            VL53L0X_PerformRefSpadManagement(&tof_device, &spad_count, &spad_is_aperture) == VL53L0X_ERROR_NONE &&
            VL53L0X_PerformRefCalibration(&tof_device, &vhv_settings, &phase_cal) == VL53L0X_ERROR_NONE &&
            VL53L0X_SetDeviceMode(&tof_device, VL53L0X_DEVICEMODE_CONTINUOUS_TIMED_RANGING) == VL53L0X_ERROR_NONE &&

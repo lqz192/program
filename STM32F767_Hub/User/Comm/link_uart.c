@@ -8,19 +8,23 @@
 #include <string.h>
 
 #define LINK_TX_TIMEOUT_MS 30U  // 阻塞发送单帧数据的最大等待时间，单位 ms。
+#define LINK_RX_RETRY_MS   100U // 接收中断挂载失败后的低频重试周期，单位 ms。
 
 /**
  * @brief  重新挂载单字节中断接收，失败时置位恢复标志。
  * @param  link 接收上下文指针。
+ * @retval true 挂接成功；false 挂接失败。
  */
-static void restart_rx_it(link_uart *link)
+static bool restart_rx_it(link_uart *link)
 {
     if (HAL_UART_Receive_IT(link->uart, &link->rx_byte, 1U) != HAL_OK)
     {
         link->rx_restart_needed = true;
-        return;
+        link->last_restart_ms = HAL_GetTick();
+        return false;
     }
     link->rx_restart_needed = false;
+    return true;
 }
 
 /**
@@ -57,19 +61,14 @@ bool link_uart_start(link_uart *link, UART_HandleTypeDef *uart)
 {
     *link = (link_uart){ .uart = uart };
     __HAL_UART_CLEAR_OREFLAG(uart);  // 启动前清除可能残留的溢出错误标志。
-    bool started = HAL_UART_Receive_IT(uart, &link->rx_byte, 1U) == HAL_OK;
-    link->rx_restart_needed = !started;
-    return started;
+    return restart_rx_it(link);
 }
 
 void link_uart_on_rx(link_uart *link)
 {
     if (HAL_UART_GetError(link->uart) != HAL_UART_ERROR_NONE)
     {
-        __HAL_UART_CLEAR_OREFLAG(link->uart);
-        link->used = 0U;
-        link->discard = true;  // 丢弃损坏半包，等待下一个换行符重新同步。
-        restart_rx_it(link);
+        // 保留 HAL ErrorCode 供中断后续判断（如 ORE 判定），由 ErrorCallback 统一丢帧并恢复。
         return;
     }
 
@@ -98,7 +97,7 @@ void link_uart_on_rx(link_uart *link)
         }
     }
 
-    restart_rx_it(link);
+    (void)restart_rx_it(link);
 }
 
 void link_uart_on_error(link_uart *link)
@@ -106,14 +105,17 @@ void link_uart_on_error(link_uart *link)
     __HAL_UART_CLEAR_OREFLAG(link->uart);
     link->used = 0U;
     link->discard = true;  // 丢弃出错帧的残余字节，直至下一个换行符。
-    restart_rx_it(link);
+    if ((HAL_UART_GetState(link->uart) & HAL_UART_STATE_BUSY_RX) != HAL_UART_STATE_BUSY_RX)
+    {
+        (void)restart_rx_it(link);  // 仅在 HAL 接收已停止时重新挂接，避免与仍在进行的 RX 冲突。
+    }
 }
 
 bool link_uart_take(link_uart *link, char line[LINK_LINE_CAPACITY], uint32_t *received_ms)
 {
-    if (link->rx_restart_needed)
+    if (link->rx_restart_needed && HAL_GetTick() - link->last_restart_ms >= LINK_RX_RETRY_MS)
     {
-        restart_rx_it(link);  // 中断侧重启失败时由主循环兜底恢复接收。
+        (void)restart_rx_it(link);  // 启动或中断侧挂接失败时由主循环低频恢复接收。
     }
     if (!link->ready)
     {

@@ -14,9 +14,11 @@
 #define LPS22HB_DEV_ADDR        0x5CU   // SDO 接地为 0x5C，接高电平改为 0x5D。
 #define LPS22HB_SAMPLE_MS       200U    // 正常采样周期，单位 ms。
 #define LPS22HB_RETRY_MS        1000U   // 初始化/通信故障后的重连周期，单位 ms。
+#define LPS22HB_RESULT_TMO_MS   1000U   // 持续未就绪判定传感器可能复位的超时阈值，单位 ms。
 
 static bool sensor_ready;               // 传感器初始化状态标志。
 static uint32_t last_action_ms;         // 上次初始化结束或开始采样的毫秒时刻。
+static uint32_t last_result_ms;         // 上次成功读取有效数据的毫秒时刻。
 
 void app_lps22hb_init(void)
 {
@@ -26,6 +28,7 @@ void app_lps22hb_init(void)
         send_line("LPS22HB INIT_ERR\r\n");
     }
     last_action_ms = HAL_GetTick();
+    last_result_ms = last_action_ms;
 }
 
 void app_lps22hb_run(void)
@@ -51,7 +54,14 @@ void app_lps22hb_run(void)
 
     if (status == lps22hb_not_ready)
     {
-        return;  // 数据暂未更新时不视作通信故障，保留当前就绪状态。
+        // 偶发未就绪继续等待；持续超时则认为传感器已掉电复位并退回重新初始化。
+        if (now_ms - last_result_ms >= LPS22HB_RESULT_TMO_MS)
+        {
+            sensor_ready = false;
+            app_node_sample_update(node_first, NULL);
+            send_line("LPS22HB TIMEOUT\r\n");
+        }
+        return;
     }
     if (status != lps22hb_ok)
     {
@@ -61,6 +71,7 @@ void app_lps22hb_run(void)
         return;
     }
 
+    last_result_ms = now_ms;
     char line[80];
     int length = snprintf(line, sizeof(line), "LPS22HB p_pa=%ld t_centi=%ld\r\n",
                           (long)pressure_pa, (long)temperature_centi);
